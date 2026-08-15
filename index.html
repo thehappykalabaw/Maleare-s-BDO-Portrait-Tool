@@ -750,8 +750,8 @@ var BADGE_DATA = {"Bulgasal": {"label": "Bulgasal", "data": "data:image/jpeg;bas
       // foreground text, right-aligned, auto-shrunk to fit
       var padRight = h * 0.28;
       var maxTextW = w * 0.68 - padRight;
-      var fontSize = h * 0.42;
-      var minFontSize = h * 0.16;
+      var fontSize = Math.max(65, h * 0.42);
+      var minFontSize = 65;
       context.textBaseline = 'middle';
       context.textAlign = 'right';
       do {
