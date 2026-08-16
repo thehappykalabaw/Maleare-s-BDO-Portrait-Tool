@@ -573,6 +573,7 @@ var BADGE_DATA = {"Bulgasal": {"label": "Bulgasal", "data": "data:image/jpeg;bas
   var badgeImages = {}; // key -> loaded HTMLImageElement
   var customImage = null;
   var customLabel = '';
+  var customConfigured = false; // true once the user has applied an image and/or text
   var customBadgeItem = document.getElementById('customBadgeItem');
   var customThumb = document.getElementById('customThumb');
   var customBadgeFile = document.getElementById('customBadgeFile');
@@ -845,7 +846,7 @@ var BADGE_DATA = {"Bulgasal": {"label": "Bulgasal", "data": "data:image/jpeg;bas
   }
 
   customBadgeItem.addEventListener('click', function(){
-    if (!customImage) openBadgeEditor();       // nothing configured yet — go straight to setup
+    if (!customConfigured) openBadgeEditor();  // nothing configured yet — go straight to setup
     else selectBadge('custom');
   });
 
@@ -934,10 +935,10 @@ var BADGE_DATA = {"Bulgasal": {"label": "Bulgasal", "data": "data:image/jpeg;bas
     editCtx.clearRect(0, 0, editCanvas.width, editCanvas.height);
     editCtx.fillStyle = '#000';
     editCtx.fillRect(0, 0, editCanvas.width, editCanvas.height);
-    if (pendingImage && pendingImage.complete && pendingImage.width){
-      drawBadgeContent(editCtx, pendingImage, pendingLabel, 0, 0, editCanvas.width, editCanvas.height,
-        { scale: editScale, offX: editOffX, offY: editOffY });
-    }
+    var hasPendingImage = pendingImage && pendingImage.complete && pendingImage.width;
+    // no image uploaded yet? still preview the text on the default plain black background
+    drawBadgeContent(editCtx, hasPendingImage ? pendingImage : null, pendingLabel, 0, 0, editCanvas.width, editCanvas.height,
+      hasPendingImage ? { scale: editScale, offX: editOffX, offY: editOffY } : null);
   }
 
   function openBadgeEditor(){
@@ -986,24 +987,37 @@ var BADGE_DATA = {"Bulgasal": {"label": "Bulgasal", "data": "data:image/jpeg;bas
   });
 
   editApplyBtn.addEventListener('click', function(){
-    if (!pendingImage){
-      showStatus('Choose an image first.', true);
+    if (!pendingImage && !(pendingLabel && pendingLabel.trim().length)){
+      showStatus('Add an image or some badge text first.', true);
       return;
     }
     // commit the popup's pending state to the real custom-badge state
-    customImage = pendingImage;
+    customImage = pendingImage; // may be null — text-only badges use a default black background
     customLabel = pendingLabel;
-    // convert editor-space transform into final badge-region pixel space
-    var ratioOut = frameW / editCanvas.width;
-    customImgScale = editScale * ratioOut;
-    customImgOffX = editOffX * ratioOut;
-    customImgOffY = editOffY * ratioOut;
+    if (customImage){
+      // convert editor-space transform into final badge-region pixel space
+      var ratioOut = frameW / editCanvas.width;
+      customImgScale = editScale * ratioOut;
+      customImgOffX = editOffX * ratioOut;
+      customImgOffY = editOffY * ratioOut;
+    } else {
+      customImgScale = null;
+      customImgOffX = null;
+      customImgOffY = null;
+    }
 
     customThumb.innerHTML = '';
-    var t = document.createElement('img');
-    t.src = customImage.src;
-    customThumb.appendChild(t);
+    if (customImage){
+      customThumb.style.background = '';
+      var t = document.createElement('img');
+      t.src = customImage.src;
+      customThumb.appendChild(t);
+    } else {
+      // no uploaded image — show the same plain black background the badge itself will use
+      customThumb.style.background = '#000';
+    }
     customBadgeName.textContent = 'Custom';
+    customConfigured = true;
 
     pendingImage = null; // don't discard-on-close now that it's committed
     badgeEditModal.classList.remove('open');
@@ -1102,34 +1116,45 @@ var BADGE_DATA = {"Bulgasal": {"label": "Bulgasal", "data": "data:image/jpeg;bas
   // space (offX/offY measured from the region's top-left, i.e. from x,y).
   // When present it overrides the automatic cover-fit/centering.
   function drawBadgeContent(context, image, label, x, y, w, h, customTransform){
-    if (!image || !image.complete || !image.width) return;
+    var hasImage = image && image.complete && image.width;
+    // nothing to draw at all — no artwork and no text
+    if (!hasImage && !(label && label.length)) return;
 
     context.save();
     context.beginPath();
     context.rect(x, y, w, h);
     context.clip();
 
-    // background artwork
-    if (customTransform){
-      context.drawImage(
-        image,
-        x + customTransform.offX,
-        y + customTransform.offY,
-        image.width * customTransform.scale,
-        image.height * customTransform.scale
-      );
+    if (hasImage){
+      // background artwork
+      if (customTransform){
+        context.drawImage(
+          image,
+          x + customTransform.offX,
+          y + customTransform.offY,
+          image.width * customTransform.scale,
+          image.height * customTransform.scale
+        );
+      } else {
+        drawCover(context, image, x, y, w, h);
+      }
     } else {
-      drawCover(context, image, x, y, w, h);
+      // no uploaded image for this badge — fall back to a plain black background
+      context.fillStyle = '#000000';
+      context.fillRect(x, y, w, h);
     }
 
     if (label && label.length){
-      // dark scrim on the right side so text stays legible, art stays visible on the left
-      var grad = context.createLinearGradient(x + w*0.28, 0, x + w, 0);
-      grad.addColorStop(0, 'rgba(8,6,14,0)');
-      grad.addColorStop(0.55, 'rgba(8,6,14,0.62)');
-      grad.addColorStop(1, 'rgba(8,6,14,0.86)');
-      context.fillStyle = grad;
-      context.fillRect(x, y, w, h);
+      if (hasImage){
+        // dark scrim on the right side so text stays legible, art stays visible on the left
+        var grad = context.createLinearGradient(x + w*0.28, 0, x + w, 0);
+        grad.addColorStop(0, 'rgba(8,6,14,0)');
+        grad.addColorStop(0.55, 'rgba(8,6,14,0.62)');
+        grad.addColorStop(1, 'rgba(8,6,14,0.86)');
+        context.fillStyle = grad;
+        context.fillRect(x, y, w, h);
+      }
+      // (background is already solid black when there's no image, so no scrim needed)
 
       // foreground text, right-aligned, auto-shrunk to fit — starts large but
       // scales down properly so longer names still fit cleanly on the badge
@@ -1196,10 +1221,15 @@ var BADGE_DATA = {"Bulgasal": {"label": "Bulgasal", "data": "data:image/jpeg;bas
     }
 
     var active = getActiveBadge();
-    if (active && active.image && active.image.complete && active.image.width){
-      var badgeH = Math.round(frameH * BADGE_HEIGHT_FRACTION);
-      var badgeY = (badgePosition === 'bottom') ? (frameH - badgeH) : 0;
-      drawBadgeContent(ctx, active.image, active.label, 0, badgeY, frameW, badgeH, active.transform);
+    if (active){
+      var activeHasImage = active.image && active.image.complete && active.image.width;
+      // custom badges can be text-only (default plain black background); named
+      // boss badges always come with artwork, so this only ever applies to 'custom'
+      if (activeHasImage || (active.label && active.label.length)){
+        var badgeH = Math.round(frameH * BADGE_HEIGHT_FRACTION);
+        var badgeY = (badgePosition === 'bottom') ? (frameH - badgeH) : 0;
+        drawBadgeContent(ctx, activeHasImage ? active.image : null, active.label, 0, badgeY, frameW, badgeH, active.transform);
+      }
     }
   }
 
