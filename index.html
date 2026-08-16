@@ -1013,8 +1013,8 @@ var BADGE_DATA = {"Bulgasal": {"label": "Bulgasal", "data": "data:image/jpeg;bas
       t.src = customImage.src;
       customThumb.appendChild(t);
     } else {
-      // no uploaded image — show the same plain black background the badge itself will use
-      customThumb.style.background = '#000';
+      // no uploaded image — show the same gradient background the badge itself will use
+      customThumb.style.background = 'linear-gradient(90deg, rgba(8,6,14,0.18) 0%, rgba(8,6,14,0.66) 55%, rgba(8,6,14,0.92) 100%)';
     }
     customBadgeName.textContent = 'Custom';
     customConfigured = true;
@@ -1139,8 +1139,14 @@ var BADGE_DATA = {"Bulgasal": {"label": "Bulgasal", "data": "data:image/jpeg;bas
         drawCover(context, image, x, y, w, h);
       }
     } else {
-      // no uploaded image for this badge — fall back to a plain black background
-      context.fillStyle = '#000000';
+      // no uploaded image for this badge — fall back to a gradient (instead of a flat
+      // black fill) so whatever is behind the badge stays partly visible on the left,
+      // while still darkening toward the text side for contrast
+      var gradNoImg = context.createLinearGradient(x, 0, x + w, 0);
+      gradNoImg.addColorStop(0, 'rgba(8,6,14,0.18)');
+      gradNoImg.addColorStop(0.55, 'rgba(8,6,14,0.66)');
+      gradNoImg.addColorStop(1, 'rgba(8,6,14,0.92)');
+      context.fillStyle = gradNoImg;
       context.fillRect(x, y, w, h);
     }
 
@@ -1154,7 +1160,7 @@ var BADGE_DATA = {"Bulgasal": {"label": "Bulgasal", "data": "data:image/jpeg;bas
         context.fillStyle = grad;
         context.fillRect(x, y, w, h);
       }
-      // (background is already solid black when there's no image, so no scrim needed)
+      // (background is already a dark gradient when there's no image, so no extra scrim needed)
 
       // foreground text, right-aligned, auto-shrunk to fit — starts large but
       // scales down properly so longer names still fit cleanly on the badge
